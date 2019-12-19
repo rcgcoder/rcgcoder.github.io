@@ -16,7 +16,7 @@
 <script language="javascript" type="text/javascript" src="arbolTerritorio.js"></script>	
 
 <script type="text/javascript">
-var arrExcels=[{archivo:"data/Internet+en+aragon.xlsx",tipo:"detalle"}
+var arrExcels=[{archivo:"data/Internet en aragon.xlsx",tipo:"detalle"}
 				//,{archivo:,tipo:"Estimaciones"}
 				];
 var log=function(sCad){
@@ -198,6 +198,9 @@ var loadTree=function (objTree){
 					elemento.estado["ACUMULADO"].habitantes+=entidad.datos.Total;
 				} else {
 					sEstado=entidad.datos.actuante;
+					if (sEstado.substring(0,3)=='AGE'){
+						sEstado='AGE';
+					}
 					if (auxEstado!="INICIATIVA PÚBLICA") { 
 						elemento.estado[sEstado].planificadas++;
 						elemento.estado[sEstado].habPlanificadas+=entidad.datos.Total;
@@ -343,6 +346,15 @@ var onClick=function(oItem){
 	$("#espsTotalVal").html(oElemData.estado.TOTAL.entidades);
 	$("#espsVal").html(oElemData.estado.ACUMULADO.entidades);
 	$("#espsPrevistasVal").html(oElemData.estado.ACUMULADO.planificadas);
+	debugger;
+	if ((oElemData.tipo=="Entidad Singular de Población")
+			&&(oElemData.estado.PRIV.entidades==0)
+			&& (oElemData.estado.PEND.entidades==0)){
+		$("#infoDetallePlanificacion").show();
+		$("#infoDetallePlanificacion").html("&nbsp;&nbsp;&nbsp;Actuación del Organismo:&nbsp;"+oElemData.datos.actuante);
+	} else {
+		$("#infoDetallePlanificacion").hide();
+	}
 	$("#espsPendientesVal").html(oElemData.estado.PEND.entidades);
 	
 	$("#habsTotalVal").html(oElemData.estado.TOTAL.habitantes);
@@ -446,20 +458,33 @@ window.onload = function() {
 </script>
 </head>
 <body >
+	<div class="cabecera"> 
+		<div class="logoDGA"> 
+			<a href="https://www.aragon.es" class="logo-dga"> 
+				<img src="https://www.aragon.es/o/aragon-theme/images/dga/logo-dga-color.svg" alt="Gobierno de Aragón. Ir a la página principal del portal."> 
+				</a> 
+		</div> 
+		<div class="logoFeder"> 
+			<a href="http://www.aragon.es/Fondos_Europeos" class="logo-dga" title="Más información sobre los Fondos Estructurales y de Inversión Europeos (Fondos EIE)"> 
+			<img class="image" src="https://www.aragon.es/o/aragon-theme/images/dga/flag_europe.svg" alt="Unión Europea"> </a> 
+		</div>
+	</div>
 <div id="loading">  Cargando datos.... </div>
-<div id="SelectorESP" class="FloatRight">
+<div id="SelectorESP" class="FloatRight">  
 	<div id="buscador" >
 		
 		Filtro <input id="sBusqueda"/>
-		<br>
+		<br> 
 		<span id="searchResult"></span>
 		<button id="prevMatch"> < </button>
 		<span id="idMatch"></span>
-		<button id="nextMatch"> > </button>
+		<button id="nextMatch"> > </button> 
 	</div>
 		<hr>
+	<div class="scrollTree">
 		<div id="selTree">
 		</div>
+	</div>
 </div>
 <div id="datos" class="FloatLeft">
 	<div id="infoText">
@@ -467,15 +492,16 @@ window.onload = function() {
 		<div id="infoPath">Detalle: <span id="selectedPath"></span> </div>
 		<div id="infoSeleccionadoTipo">Tipo: <span id="selectedType"></span> </div>
 		<hr>
-		<div id="infoESPsTotal">Total Entidades:<span id="espsTotalVal"> 0 </span> </div>
-		<div id="infoESPs">Entidades con Banda Ancha:<span id="espsVal"> 0 </span> </div>
-		<div id="infoESPsPlanificadas">Entidades Con Banda Ancha Planificada:<span id="espsPrevistasVal"> 0 </span> </div>
-		<div id="infoESPsPendientes">Entidades pendientes:<span id="espsPendientesVal"> 0 </span> </div>
+		<div id="infoESPsTotal">Total Entidades: <span id="espsTotalVal"> 0 </span> </div>
+		<div id="infoESPs">&nbsp;&nbsp;&nbsp;Entidades con Banda Ancha: <span id="espsVal"> 0 </span> </div>
+		<div id="infoESPsPlanificadas">&nbsp;&nbsp;&nbsp;Entidades con Banda Ancha Planificada: <span id="espsPrevistasVal"> 0 </span> </div>
+			<div id="infoDetallePlanificacion"></div>
+		<div id="infoESPsPendientes">&nbsp;&nbsp;&nbsp;Entidades pendientes: <span id="espsPendientesVal"> 0 </span> </div>
 
-		<div id="infoHabitantesTotal">Total Habitantes:<span id="habsTotalVal"> 0 </span> </div>
-		<div id="infoHabitantes">Habitantes con acceso a Banda Ancha:<span id="habsVal"> 0 </span> </div>
-		<div id="infoHabitantesPlanificadas">Habitantes con acceso a Banda Ancha Planificada:<span id="habsPrevistasVal"> 0 </span> </div>
-		<div id="infoHabitantesPendientes">Habitantes pendientes:<span id="habsPendientesVal"> 0 </span> </div>
+		<div id="infoHabitantesTotal">Total Habitantes: <span id="habsTotalVal"> 0 </span> </div>
+		<div id="infoHabitantes">&nbsp;&nbsp;&nbsp;Habitantes con acceso a Banda Ancha: <span id="habsVal"> 0 </span> </div>
+		<div id="infoHabitantesPlanificadas">&nbsp;&nbsp;&nbsp;Habitantes con acceso a Banda Ancha Planificada: <span id="habsPrevistasVal"> 0 </span> </div>
+		<div id="infoHabitantesPendientes">&nbsp;&nbsp;&nbsp;Habitantes pendientes: <span id="habsPendientesVal"> 0 </span> </div>
 		<hr>
 		Entidades Singulares de Población 
 		<div id="tartaESPs" class="demo-placeholder"></div>

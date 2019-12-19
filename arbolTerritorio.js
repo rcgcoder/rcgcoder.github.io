@@ -15,7 +15,7 @@ var initTree=function(onInit,onClick){
 				"default" : { "valid_children" : ["default","file"] },
 				"file" : { "icon" : "glyphicon glyphicon-file", "valid_children" : [] }
 			},
-			"plugins" : [ "contextmenu", "dnd", "search", "state", "types", "wholerow" ]
+			"plugins" : [  "dnd", "search", "state", "types", "wholerow" ]
 		});
 	var selTree= $('#selTree').jstree(true);
 	$("#selTree").on("select_node.jstree",

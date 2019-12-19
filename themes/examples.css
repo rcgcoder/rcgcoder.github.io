@@ -104,3 +104,23 @@ input[type=checkbox] {
   display:inline-block;
   vertical-align:top;
 }
+
+.logo-dga img {
+    width: auto;
+    height: 5rem;
+}
+.cabecera {
+	display:block;
+	background-color: #212529;
+}
+.logoFeder {
+   display: block;
+   float: right;
+}
+.logoDGA{
+	display: inline-block;
+}
+.scrollTree{
+	overflow: auto; 
+	height:-webkit-fill-available;
+}
