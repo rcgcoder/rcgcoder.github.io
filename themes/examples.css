@@ -99,6 +99,7 @@ input[type=checkbox] {
 .FloatRight {
    display:inline-block;
    vertical-align:top;
+
 }
 .FloatLeft {
   display:inline-block;
@@ -119,6 +120,9 @@ input[type=checkbox] {
 }
 .logoDGA{
 	display: inline-block;
+}
+.findLugar{
+	width:60%;
 }
 .scrollTree{
 	overflow: auto; 

@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html>
+<title>Banda Ancha en Municipio Aragón</title>
+<head>
+<meta charset="UTF-8">
+<link href="themes/examples.css" rel="stylesheet" type="text/css">
+<link rel="stylesheet" href="themes/default/style.min.css" />	
+
+<script type="text/javascript" src="lib/jquery/jquery-3.4.1.min.js"></script>
+<script language="javascript" type="text/javascript" src="lib/excel/xlsx.core.min.js"></script>
+<script language="javascript" type="text/javascript" src="lib/excel/procesarExcel.js"></script>
+<script language="javascript" type="text/javascript" src="lib/flot/jquery.flot.js"></script>
+<script language="javascript" type="text/javascript" src="lib/flot/jquery.flot.pie.js"></script>
+<script language="javascript" type="text/javascript" src="lib/jstree/jstree.min.js"></script>	
+
+<script language="javascript" type="text/javascript" src="arbolTerritorio.js"></script>	
+
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+
+<script type="text/javascript">
+var arrExcels=[{archivo:"data/Internet en aragon.xlsx",tipo:"detalle"}
+				//,{archivo:,tipo:"Estimaciones"}
+				];
+var log=function(sCad){
+	console.log(sCad);
+}
+var isDef=function(vVar){
+	return (typeof vVar!=="undefined");
+}
+function eliminarDiacriticosEs(texto) {
+    return texto
+           .normalize('NFD')
+           .replace(/([^n\u0300-\u036f]|n(?!\u0303(?![\u0300-\u036f])))[\u0300-\u036f]+/gi,"$1")
+           .normalize();
+}
+var arrESPs=[];
+
+var shtProcess=function(sht){
+	var nVacias=0;
+	var iCol=0;
+	var iRow=0;
+	var bContinua=true;
+	iRow=0;
+	bContinua=true;
+	nVacias=0;
+	var arrAttribs=[];
+	log("Cargando la primera fila como nombre de los atributos");
+	while (bContinua){
+		var sVal=sht.getCell(iRow,iCol);
+		if (sVal==""){
+			bContinua=false;
+		} else {
+			//log(sVal);
+			arrAttribs.push(sVal);
+			iCol++;
+		}
+	}
+	bContinua=true;
+	iCol=0;
+	debugger;
+	while (bContinua){
+		iRow++;
+		var sVal=sht.getCell(iRow,iCol);
+		if (sVal==""){
+			bContinua=false;
+		} else {
+			//log(sVal);
+			var objESP={};
+			arrAttribs.forEach((fieldName,index)=>{
+				objESP[fieldName]=sht.getCell(iRow,index);
+			});
+			arrESPs.push(objESP);
+		}
+	}
+	
+}
+var datos={};
+var theTree="";
+var loadTree=function (objTree){
+	debugger;
+	theTree=objTree;
+	if (! isDef(objTree.loadedNodes)){
+		$("#loading").html("Visualizando Datos...");
+		datos={};
+		objTree.loadedNodes=true;
+		objTree.datos=datos;
+		datos.provincias={};
+		datos.arrProvincias=[];
+		datos.names=[];
+		datos.namesIndex={};
+		datos.addName=function (name,obj){
+			var normName=eliminarDiacriticosEs(name).toUpperCase();
+			if (isDef(datos.namesIndex[normName])){
+				var nameIdx=datos.namesIndex[normName];
+				var nameValue=datos.names[nameIdx];
+				nameValue.values.push(obj);
+			} else {
+				datos.names.push({name:normName,values:[obj]});
+			}
+		}
+		datos.createStats=function(){
+			return {
+					PEND:{entidades:0,habitantes:0},
+					PRIV:{entidades:0,habitantes:0},
+					AGE:{entidades:0, planificadas:0,habitantes:0, habPlanificadas:0},
+					DGA:{entidades:0, planificadas:0,habitantes:0, habPlanificadas:0},
+					DPT:{entidades:0, planificadas:0,habitantes:0, habPlanificadas:0},
+					DPH:{entidades:0, planificadas:0,habitantes:0, habPlanificadas:0},
+					DPZ:{entidades:0, planificadas:0,habitantes:0, habPlanificadas:0},
+					ACUMULADO:{entidades:0, planificadas:0, habitantes:0, habPlanificadas:0},
+					TOTAL:{entidades:0, habitantes:0}
+				}
+					
+		}
+		datos.estado=datos.createStats();
+		
+		arrESPs.forEach(oESP=>{
+			debugger;
+			log(JSON.stringify(oESP,3));
+			var sProvincia=((oESP.Provincia==22)?"DPH":(oESP.Provincia==44)?"DPT":"DPZ");
+			var sProvinciaName=((oESP.Provincia==22)?"Provincia de Huesca":(oESP.Provincia==44)?"Provincia de Teruel":"Provincia de Zaragoza");
+			var provincia=datos.provincias[sProvincia];
+			if (!isDef(provincia)){
+				datos.provincias[sProvincia]={
+					id:sProvincia,
+					nombre:sProvinciaName,
+					tipo:"Provincia",
+					oParent:datos,
+					estado:datos.createStats(),
+					comarcas:{},
+					arrComarcas:[]
+				};
+				provincia=datos.provincias[sProvincia];
+				datos.arrProvincias.push(provincia);
+				datos.addName(sProvincia,provincia);
+			}
+			var sComarca=oESP.Comarca.substring(3,oESP.Comarca.length);
+			var comarca=provincia.comarcas[sComarca];
+			if (!isDef(comarca)){
+				provincia.comarcas[sComarca]={
+					id:sComarca,
+					tipo:"Comarca",
+					nombre:sComarca,
+					oParent:provincia,
+					estado:datos.createStats(),
+					municipios:{},
+					arrMunicipios:[]
+				};
+				comarca=provincia.comarcas[sComarca];
+				provincia.arrComarcas.push(comarca);
+				datos.addName(sComarca,comarca);
+			}
+			var sMunicipio=oESP.Municipio;
+			var municipio=comarca.municipios[sMunicipio];
+			if (!isDef(municipio)){
+				comarca.municipios[sMunicipio]={
+					id:sMunicipio,
+					tipo:"Municipio",
+					nombre:sMunicipio,
+					oParent:comarca,
+					estado:datos.createStats(),
+					entidades:{},
+					arrEntidades:[]
+				};
+				municipio=comarca.municipios[sMunicipio];
+				comarca.arrMunicipios.push(comarca.municipios[sMunicipio]);
+				datos.addName(sMunicipio,municipio);
+			}
+			var sNombre=oESP.nombre;
+			var entidad=municipio.entidades[sNombre];
+			if (!isDef(entidad)){
+				municipio.entidades[sNombre]={
+					id:sNombre,
+					tipo:"Entidad Singular de Población",
+					nombre:sNombre,
+					oParent:municipio,
+					estado:datos.createStats(),
+					datos:oESP
+				};
+				entidad=municipio.entidades[sNombre];
+				municipio.arrEntidades.push(municipio.entidades[sNombre]);
+				datos.addName(sNombre,entidad);
+			} 
+			var sEstado="";
+			var bPlanificada=false;
+			var auxEstado=entidad.datos.estado.toUpperCase();
+			var arrElementos=[entidad,municipio,comarca,provincia,datos];
+			arrElementos.forEach(elemento=>{
+				elemento.estado["TOTAL"].entidades++;
+				elemento.estado["TOTAL"].habitantes+=entidad.datos.Total;
+				if (auxEstado=="PENDIENTE") {
+					sEstado="PEND";
+					elemento.estado[sEstado].entidades++;
+					elemento.estado[sEstado].habitantes+=entidad.datos.Total;
+				} else if (auxEstado=="INICIATIVA PRIVADA") {
+					sEstado="PRIV";
+					elemento.estado[sEstado].entidades++;
+					elemento.estado[sEstado].habitantes+=entidad.datos.Total;
+					elemento.estado["ACUMULADO"].entidades++;
+					elemento.estado["ACUMULADO"].habitantes+=entidad.datos.Total;
+				} else {
+					sEstado=entidad.datos.actuante;
+					if (sEstado.substring(0,3)=='AGE'){
+						sEstado='AGE';
+					}
+					if (auxEstado!="INICIATIVA PÚBLICA") { 
+						elemento.estado[sEstado].planificadas++;
+						elemento.estado[sEstado].habPlanificadas+=entidad.datos.Total;
+						elemento.estado["ACUMULADO"].planificadas++;
+						elemento.estado["ACUMULADO"].habPlanificadas+=entidad.datos.Total;
+					} else {
+						elemento.estado[sEstado].entidades++;
+						elemento.estado[sEstado].habitantes+=entidad.datos.Total;
+						elemento.estado["ACUMULADO"].entidades++;
+						elemento.estado["ACUMULADO"].habitantes+=entidad.datos.Total;
+					}
+				}			
+			});
+		});
+		var arrDDPP=["DPH","DPT","DPZ"];
+		var fncSortIds=function(a,b){
+				if (b.id>a.id) return -1;
+			};
+		datos.byIndex={};
+		datos.indexList=[];
+		datos.idTree="DGA";
+		var newNode;
+		arrDDPP.forEach(sDP=>{
+			var oProvincia=datos.provincias[sDP];
+			if (sDP=="DPH") {
+				newNode=objTree.create_node("DGA", {"text":"Provincia de Huesca","id":"DPH"});
+			} else if (sDP=="DPT") {
+				newNode=objTree.create_node("DGA", {"text":"Provincia de Teruel","id":"DPT"});
+			} else if (sDP=="DPZ") {
+				newNode=objTree.create_node("DGA", {"text":"Provincia de Zaragoza","id":"DPZ"});
+			}
+			datos.byIndex[sDP]=oProvincia;
+			datos.indexList.push(sDP);
+			oProvincia.arrComarcas.sort(fncSortIds);
+			oProvincia.idTree=sDP;
+			oProvincia.treeNode=newNode;
+			oProvincia.arrComarcas.forEach(oComarca=>{
+				var idxComarca=oComarca.id+"_C";
+				oComarca.idTree=idxComarca;
+				newNode=objTree.create_node(sDP, {"text":oComarca.id,"id":idxComarca});
+				oComarca.treeNode=newNode;
+
+				datos.byIndex[idxComarca]=oComarca;
+				datos.indexList.push(idxComarca);
+				oComarca.arrMunicipios.sort(fncSortIds);
+				oComarca.arrMunicipios.forEach(oMunicipio=>{
+					var idxMunicipio=oMunicipio.id+"_M_"+idxComarca;
+					oMunicipio.idTree=idxMunicipio;
+					newNode=objTree.create_node(idxComarca, {"text":oMunicipio.id,"id":idxMunicipio});
+					oMunicipio.treeNode=newNode;
+
+					datos.byIndex[idxMunicipio]=oMunicipio;
+					datos.indexList.push(idxMunicipio);
+					
+					oMunicipio.arrEntidades.sort(fncSortIds);
+					oMunicipio.arrEntidades.forEach(oEntidad=>{
+						var idxEntidad=oEntidad.id+"_E_"+idxMunicipio;
+						oEntidad.idTree=idxEntidad;
+						newNode=objTree.create_node(idxMunicipio, 
+							{"text":oEntidad.id
+								,"id":idxEntidad});
+						oEntidad.treeNode=newNode;
+						datos.byIndex[idxEntidad]=oEntidad;
+						datos.indexList.push(idxEntidad);
+					});
+				});
+			});
+		});
+		$("#loading").hide();
+		$("#SelectorESP").show();
+		$("#datos").show();
+		var fncActivarNodo=function(idNodo){
+			theTree.close_all();
+			theTree.activate_node(idNodo);
+			theTree._open_to(idNodo).focus();
+		}
+		$("#sBusqueda").keyup(function(){
+			debugger;
+			var sText=$("#sBusqueda").val();
+			sText=sText.toUpperCase();
+			sText=eliminarDiacriticosEs(sText);
+			var arrResults=[];
+			var bFinish=false;
+			for (var i=0;(i<datos.names.length)&&(!bFinish);i++){
+				var sItemName=datos.names[i].name;
+				if (sItemName.search(sText)>=0){
+					if (arrResults.length>6){
+						bFinish=true;
+					} else {
+						arrResults.push(datos.names[i]);
+					}
+				}
+			}
+			if ((arrResults.length>0) && (arrResults.length<=6)){
+				$("#searchResult").html(arrResults.length+" resultados para ese filtro");
+				var iActualIndex=0;
+				fncActivarNodo(arrResults[iActualIndex].values[0].idTree);
+				$("#idMatch").html((iActualIndex+1)+" de " + arrResults.length);
+				$("#nextMatch").click(function(){
+					iActualIndex++;
+					if (iActualIndex>=arrResults.length) iActualIndex=0;
+					fncActivarNodo(arrResults[iActualIndex].values[0].idTree);
+					$("#idMatch").html((iActualIndex+1)+" de " + arrResults.length);
+				});
+				$("#prevMatch").click(function(){
+					iActualIndex--;
+					if (iActualIndex<0) iActualIndex=(arrResults.length-1);
+					fncActivarNodo(arrResults[iActualIndex].values[0].idTree);
+					$("#idMatch").html((iActualIndex+1)+" de " + arrResults.length);
+				});
+			} else {
+				if (arrResults.length==0) {
+					$("#searchResult").html("No hay resultados para ese filtro");
+				} else {
+					$("#searchResult").html("Demasiados resultados para ese filtro");
+				}
+				theTree.close_all();
+			}
+		});
+		var arrPicker=[];
+		debugger;
+		var sResult="Aragón (Comunidad Autónoma)"
+		arrPicker.push(sResult);
+		datos.namesIndex[sResult]=datos;
+		datos.names.forEach(oName=>{
+			var sResult=oName.values[0].nombre+" ("+oName.values[0].tipo+")";
+			var oParent=oName.values[0].oParent;
+			while (isDef(oParent) && isDef(oParent.tipo) && (oParent.tipo!=="Provincia")){
+				sResult+=" - "+oParent.nombre+" ("+oParent.tipo+")";
+				oParent=oParent.oParent;
+			}
+/*			if (oParent.tipo=="Provincia"){
+				sResult+=" - "+oParent.nombre;
+			}
+*/			arrPicker.push(sResult);
+			datos.namesIndex[sResult]=oName.values[0];
+		});
+		arrPicker.sort(function(a,b){
+			if (a<b) return -1;
+		});
+		$( "#findLugar" ).autocomplete({
+		  source: arrPicker,
+		  close: function(oValue,ui){
+			log("lugar cambiado");
+			debugger;
+			$("#loading").html("Procesando Datos...");
+			$("#loading").show();
+			log("Buscando visible");
+			log("Mostrando detalle....");
+			$("#detalle").show();
+			var sValue=$(oValue.target).val();
+			var oElem=datos.namesIndex[sValue];
+			onClick(oElem);
+			$("#loading").hide();
+			log("detalle mostrado....");
+			}
+		});
+	}
+}
+var onClick=function(oItem){
+	debugger;
+	var oElemData="";
+	if (!isDef(oItem.tipo)) {
+		if ((oItem.idTree=="DGA")||(oItem.id=="DGA")){
+			oElemData=datos;
+			oElemData.tipo="Comunidad Autónoma";
+		} else {
+			oElemData=datos.byIndex[oItem.id];
+		}
+	} else {
+		oElemData=oItem;
+	}
+	$("#selectedName").html(oElemData.nombre);
+	var auxElem=oElemData.oParent;
+	var sPath="";
+	while (isDef(auxElem)){
+		if (isDef(auxElem.nombre)) sPath+=(sPath!==""?" / ":"") + auxElem.nombre;
+		auxElem=auxElem.oParent;
+	}
+	$("#selectedPath").html(sPath);
+	$("#selectedType").html(oElemData.tipo);
+	
+	
+	$("#espsTotalVal").html(oElemData.estado.TOTAL.entidades);
+	$("#espsVal").html(oElemData.estado.ACUMULADO.entidades);
+	$("#espsPrevistasVal").html(oElemData.estado.ACUMULADO.planificadas);
+	debugger;
+	if ((oElemData.tipo=="Entidad Singular de Población")
+			&&(oElemData.estado.PRIV.entidades==0)
+			&& (oElemData.estado.PEND.entidades==0)){
+		$("#infoDetallePlanificacion").show();
+		$("#infoDetallePlanificacion").html("&nbsp;&nbsp;&nbsp;Actuación del Organismo:&nbsp;"+oElemData.datos.actuante);
+	} else {
+		$("#infoDetallePlanificacion").hide();
+	}
+	$("#espsPendientesVal").html(oElemData.estado.PEND.entidades);
+	
+	$("#habsTotalVal").html(oElemData.estado.TOTAL.habitantes);
+	$("#habsVal").html(oElemData.estado.ACUMULADO.habitantes);
+	$("#habsPrevistasVal").html(oElemData.estado.ACUMULADO.habPlanificadas);
+	$("#habsPendientesVal").html(oElemData.estado.PEND.habitantes);
+	
+	var dataESPs = [];
+	dataESPs[0]={label:"disponible: "+oElemData.estado.ACUMULADO.entidades,data:oElemData.estado.ACUMULADO.entidades};
+	dataESPs[1]={label:"planificado: "+oElemData.estado.ACUMULADO.planificadas,data:oElemData.estado.ACUMULADO.planificadas};
+	dataESPs[2]={label:"pendiente: "+oElemData.estado.PEND.entidades,data:oElemData.estado.PEND.entidades};
+	
+	
+	$.plot('#tartaESPs', dataESPs, {
+		series: {
+			pie: {
+				show: true
+			}
+		},
+		colors: ["#22FF22", "#2222FF","#FF2222"],
+	});
+	var dataHabs = [];
+	dataHabs[0]={label:"disponible: "+oElemData.estado.ACUMULADO.habitantes,data:oElemData.estado.ACUMULADO.habitantes};
+	dataHabs[1]={label:"planificado: "+oElemData.estado.ACUMULADO.habPlanificadas,data:oElemData.estado.ACUMULADO.habPlanificadas};
+	dataHabs[2]={label:"pendiente: "+oElemData.estado.PEND.habitantes,data:oElemData.estado.PEND.habitantes};
+	$.plot('#tartaHabs', dataHabs, {
+		series: {
+			pie: {
+				show: true
+			}
+		},
+		colors: ["#22FF22", "#2222FF","#FF2222"],
+	});
+	var arrOrgs=["AGE","DGA","DPH","DPT","DPZ","PRIV"];
+	var dataDetalleESPs = [];
+	var dataDetalleHabs = [];
+	var arrValues1=[];
+	var arrValues2=[];
+	var arrColors=["#002200", "#004400","#006600","#000000","#000000","#008800"];
+	var rstColorsESPs=[];
+	var rstColorsHABs=[];
+	arrOrgs.forEach((org,orgIdx)=>{
+		if (oElemData.estado[org].entidades>0){
+			arrValues1.push({label:"disponible "+org+": "+oElemData.estado[org].entidades,data:oElemData.estado[org].entidades});
+			rstColorsESPs.push(arrColors[orgIdx]);
+		}
+		if (oElemData.estado[org].habitantes>0){
+			arrValues2.push({label:"disponible "+org+": "+oElemData.estado[org].habitantes,data:oElemData.estado[org].habitantes});
+			rstColorsHABs.push(arrColors[orgIdx]);
+		}
+	});
+	arrValues1.sort((a,b)=>{if (a.data>b.data) return -1;});
+	arrValues1.forEach(elem=>{dataDetalleESPs.push(elem)});
+	arrValues2.sort((a,b)=>{if (a.data>b.data) return -1;});
+	arrValues2.forEach(elem=>{dataDetalleHabs.push(elem)});
+
+	arrValues1=[];
+	arrValues2=[];
+	var arrColorsPlanificado=["#000077", "#0000AA","#0000FF","#000000","#000000","#000000"];
+	arrOrgs.forEach((org,orgIdx)=>{
+		if (oElemData.estado[org].planificadas>0){
+			arrValues1.push({label:"planificado "+org+": "+oElemData.estado[org].planificadas,data:oElemData.estado[org].planificadas});
+			rstColorsESPs.push(arrColorsPlanificado[orgIdx]);
+		}
+		if (oElemData.estado[org].habPlanificadas>0){
+			arrValues2.push({label:"planificado "+org+": "+oElemData.estado[org].habPlanificadas,data:oElemData.estado[org].habPlanificadas});
+			rstColorsHABs.push(arrColorsPlanificado[orgIdx]);
+		}
+	});
+	arrValues1.sort((a,b)=>{if (a.data>b.data) return -1;});
+	arrValues1.forEach(elem=>{dataDetalleESPs.push(elem)});
+	arrValues2.sort((a,b)=>{if (a.data>b.data) return -1;});
+	arrValues2.forEach(elem=>{dataDetalleHabs.push(elem)});
+		
+
+	if (oElemData.estado.PEND.entidades>0) {
+		dataDetalleESPs.push({label:"pendiente: "+oElemData.estado.PEND.entidades,data:oElemData.estado.PEND.entidades});
+		rstColorsESPs.push("#FF2222");
+	}
+	if (oElemData.estado.PEND.habitantes>0) {
+		dataDetalleHabs.push({label:"pendiente: "+oElemData.estado.PEND.habitantes,data:oElemData.estado.PEND.habitantes});
+		rstColorsHABs.push("#FF2222");
+	}
+	if (dataDetalleESPs.length==0) dataDetalleESPs.push({label:"SIN ENTIDADES",data:0});
+	if (dataDetalleHabs.length==0) dataDetalleHabs.push({label:"SIN HABITANTES",data:0});
+	$.plot('#tartaDetalleESPs', dataDetalleESPs, {
+		series: {
+			pie: {
+				show: true
+			}
+		},
+		colors:rstColorsESPs,
+	});
+	$.plot('#tartaDetalleHabs', dataDetalleHabs, {
+		series: {
+			pie: {
+				show: true
+			}
+		},
+		colors:rstColorsHABs,
+	});
+	
+//	log(oItem);
+//	log(datos);
+}
+window.onload = function() {
+	$("#SelectorESP").hide();
+	$("#datos").hide();
+	$("#navegador").hide();
+	$("#detalle").hide();
+	cargarTodasExcels(shtProcess,function(){
+		$("#loading").html("Procesando Datos...");
+		initTree(loadTree,onClick);
+	})
+}
+	
+</script>
+</head>
+<body >
+	<div class="cabecera"> 
+		<div class="logoDGA"> 
+			<a href="https://www.aragon.es" class="logo-dga"> 
+				<img src="https://www.aragon.es/o/aragon-theme/images/dga/logo-dga-color.svg" alt="Gobierno de Aragón. Ir a la página principal del portal."> 
+				</a> 
+		</div> 
+		<div class="logoFeder"> 
+			<a href="http://www.aragon.es/Fondos_Europeos" class="logo-dga" title="Más información sobre los Fondos Estructurales y de Inversión Europeos (Fondos EIE)"> 
+			<img class="image" src="https://www.aragon.es/o/aragon-theme/images/dga/flag_europe.svg" alt="Unión Europea"> </a> 
+		</div>
+	</div>
+<div id="loading">  Cargando datos.... </div>
+<div id="SelectorESP" >  
+	<div id="finder">
+		<div class="ui-widget">
+		  <br>
+		  <label for="tags">Indique el lugar: </label>
+		  <input id="findLugar" class="findLugar">
+		</div>	
+	</div>
+	<div id="navegador">
+		<div id="buscador" >
+			
+			Filtro <input id="sBusqueda"/>
+			<br> 
+			<span id="searchResult"></span>
+			<button id="prevMatch"> < </button>
+			<span id="idMatch"></span>
+			<button id="nextMatch"> > </button> 
+		</div>
+			<hr>
+		<div class="scrollTree">
+			<div id="selTree">
+			</div>
+		</div>
+	</div>
+</div>
+<div id="detalle" style="padding-top:30px">
+	<div id="datos" style="display:inline-block;padding-right: 30px;">
+		<div id="infoText">
+			<div id="infoSeleccionado">Seleccionado: <span id="selectedName"></span> </div>
+			<div id="infoPath">Detalle: <span id="selectedPath"></span> </div>
+			<div id="infoSeleccionadoTipo">Tipo: <span id="selectedType"></span> </div>
+			<hr>
+			<div id="infoESPsTotal">Total Entidades: <span id="espsTotalVal"> 0 </span> </div>
+			<div id="infoESPs">&nbsp;&nbsp;&nbsp;Entidades con Banda Ancha: <span id="espsVal"> 0 </span> </div>
+			<div id="infoESPsPlanificadas">&nbsp;&nbsp;&nbsp;Entidades con Banda Ancha Planificada: <span id="espsPrevistasVal"> 0 </span> </div>
+				<div id="infoDetallePlanificacion"></div>
+			<div id="infoESPsPendientes">&nbsp;&nbsp;&nbsp;Entidades pendientes: <span id="espsPendientesVal"> 0 </span> </div>
+
+			<div id="infoHabitantesTotal">Total Habitantes: <span id="habsTotalVal"> 0 </span> </div>
+			<div id="infoHabitantes">&nbsp;&nbsp;&nbsp;Habitantes con acceso a Banda Ancha: <span id="habsVal"> 0 </span> </div>
+			<div id="infoHabitantesPlanificadas">&nbsp;&nbsp;&nbsp;Habitantes con acceso a Banda Ancha Planificada: <span id="habsPrevistasVal"> 0 </span> </div>
+			<div id="infoHabitantesPendientes">&nbsp;&nbsp;&nbsp;Habitantes pendientes: <span id="habsPendientesVal"> 0 </span> </div>
+		</div>
+	</div>
+	<div id="tartas" class="FloatLeft">
+		<div style="display:inline-block;padding-right: 30px;width:300px">
+			Entidades Singulares de Población 
+			<div>
+				<div id="tartaESPs" class="demo-placeholder"></div>
+			</div>
+			Detalle entidades
+			<div>
+				<div id="tartaDetalleESPs" class="demo-placeholder"></div>
+			</div>
+		</div>
+		<div style="display:inline-block;padding-right: 30px;width:300px">
+			Habitantes censados
+			<div>
+				<div id="tartaHabs" class="demo-placeholder"></div>
+			</div>
+			Detalle habitantes
+			<div>
+				<div id="tartaDetalleHabs" class="demo-placeholder"></div>
+			</div>
+		</div>
+	</div>
+</div>
+</body>
+</html>
