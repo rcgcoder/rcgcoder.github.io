@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <title>Banda Ancha en Municipio Aragón</title>
-<head> 
+<head>
 <meta charset="UTF-8">
 <link href="themes/examples.css" rel="stylesheet" type="text/css">
 <link rel="stylesheet" href="themes/default/style.min.css" />	
@@ -19,7 +19,28 @@
 <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
 
 <script type="text/javascript">
-var arrExcels=[{archivo:"data/Internet en aragon.xlsx",tipo:"detalle"}
+var fncEspComplexId=function(esp){
+	var espNombre=esp.nombre.trim().toUpperCase();
+	var espMunicipio=esp.Municipio.trim().toUpperCase();
+	var espProvincia=(esp.Provincia==22?"HUESCA":esp.Provincia==50?"ZARAGOZA":"TERUEL");
+	return espMunicipio+"/"+espProvincia;
+}
+var fncCentroComplexId=function(centro){
+	var centroMunicipio=centro.MUNCIPIO.trim().toUpperCase();
+	var centroProvincia=centro.PROVINCIA.trim().toUpperCase();
+	var centroESP=centro.LOCALIDAD.trim().toUpperCase();
+	if (centroMunicipio===""){
+		centroMunicipio=centroESP;
+	}
+	return centroMunicipio+"/"+centroProvincia;
+}
+var arrExcels=[ 
+				{archivo:"data/Cobertura-2018.xlsx",tipo:"cobertura",elemId:"Código ESP"},
+				{archivo:"data/FactorSocial4G.xlsx",tipo:"fs4G", elemId:"Cod INE Entidad Singular"},
+				{archivo:"data/Poligonos2019.xlsx",tipo:"poligonos",elemId:"INE"},
+				{archivo:"data/ConectAragon-CentrosEducativos2019.xlsx",tipo:"centros",elemId:"NUM ADMINISTRATIVO",complexId:fncCentroComplexId},
+				{archivo:"data/Internet en aragon.xlsx",tipo:"detalle",elemId:"codINE", complexId:fncEspComplexId}
+				
 				//,{archivo:,tipo:"Estimaciones"}
 				];
 var log=function(sCad){
@@ -34,9 +55,45 @@ function eliminarDiacriticosEs(texto) {
            .replace(/([^n\u0300-\u036f]|n(?!\u0303(?![\u0300-\u036f])))[\u0300-\u036f]+/gi,"$1")
            .normalize();
 }
+var arrShtData={};
 var arrESPs=[];
 
-var shtProcess=function(sht){
+var findId=function(elemId,start,end){
+	var iStart=0;
+	var iEnd=this.length-1;
+	if (isDef(start)) iStart=start;
+	if (isDef(end)) iEnd=end;
+
+	if (iEnd<0) iEnd=0;
+	if (iStart<0) iStart=0;
+	if (iStart>iEnd) iStart=iEnd;
+	if (iEnd<iStart) iEnd=iStart;
+	
+	var sKey=elemId;
+	var idStart=this[iStart].elemId;
+	var idEnd=this[iEnd].elemId;
+
+	if (idStart==sKey){
+		return iStart;
+	}
+	if (idEnd==sKey){
+		return iEnd;
+	}
+	
+	if (iStart>=iEnd) return -1;
+	
+	var iMid=Math.floor((iEnd-iStart)/2)+iStart;
+	if (iMid<(iStart)) return -1;
+	if (iMid>(iEnd)) return -1;
+	
+	var idMid=this[iMid].elemId;
+	if (idMid==sKey) return iMid;
+	if (idMid>sKey) return this.findId(elemId,iStart+1,iMid-1);
+	if (idMid<sKey) return this.findId(elemId,iMid+1,iEnd-1);
+	return -1;
+}
+
+var shtProcess=function(sht,fileInfo){
 	var nVacias=0;
 	var iCol=0;
 	var iRow=0;
@@ -45,6 +102,7 @@ var shtProcess=function(sht){
 	bContinua=true;
 	nVacias=0;
 	var arrAttribs=[];
+	debugger;
 	log("Cargando la primera fila como nombre de los atributos");
 	while (bContinua){
 		var sVal=sht.getCell(iRow,iCol);
@@ -59,6 +117,15 @@ var shtProcess=function(sht){
 	bContinua=true;
 	iCol=0;
 	debugger;
+	var arrTipo=[];
+	var tipoExcel=fileInfo.tipo;
+	if (!isDef(arrShtData[tipoExcel])){
+		arrShtData[tipoExcel]=arrTipo;
+	} else {
+		arrTipo=arrShtData[tipoExcel];
+	}
+	var shtTipo=[];
+	arrTipo.push(shtTipo);
 	while (bContinua){
 		iRow++;
 		var sVal=sht.getCell(iRow,iCol);
@@ -66,22 +133,108 @@ var shtProcess=function(sht){
 			bContinua=false;
 		} else {
 			//log(sVal);
-			var objESP={};
+			var oElem={};
 			arrAttribs.forEach((fieldName,index)=>{
-				objESP[fieldName]=sht.getCell(iRow,index);
+				oElem[fieldName]=sht.getCell(iRow,index);
 			});
-			arrESPs.push(objESP);
+			if (isDef(fileInfo.elemId)){
+				oElem["elemId"]=oElem[fileInfo.elemId]+"";
+			}
+			if (isDef(fileInfo.complexId)){
+				oElem["complexId"]=fileInfo.complexId(oElem);
+			}
+			shtTipo.push(oElem);
 		}
 	}
-	
+	debugger;
+	if (isDef(fileInfo.elemId)){
+		shtTipo.findId=findId;
+		shtTipo.sort(function(a,b){
+			if (a.elemId<b.elemId) return -1;
+		});
+	}
 }
+
+
+var consolidarESPs=function(){
+	debugger;
+	arrESPs=arrShtData.detalle;
+	var coberturas=arrShtData.cobertura;
+	var fs4Gs=arrShtData.fs4G;
+	var poligonos=arrShtData.poligonos;
+	var centros=arrShtData.centros;
+	arrESPs.forEach(lstESPs=>{
+		lstESPs.forEach(esp=>{
+			coberturas.forEach(cobertura=>{
+				var iCobertura=cobertura.findId(esp.elemId);
+				if (iCobertura>=0){
+					var oCobertura=cobertura[iCobertura];
+					esp["4G"]=oCobertura["Cobertura 4G LTE"];
+				}
+			});
+			fs4Gs.forEach(fs4G=>{
+				var iFS4G=fs4G.findId(esp.elemId);
+				if (iFS4G>=0){
+					var oFS4G=fs4G[iFS4G];
+					esp["FS4G"]={
+							estado:(oFS4G["Estado"]=="En servicio")?"En servicio":"Planificado",
+							annio:oFS4G["Año Planificado"],
+							trimestre:oFS4G["Trimestre Planificado"], 
+					}
+				}
+			});
+		});
+	});
+	debugger;
+	poligonos.forEach(lstPoligonos=>{
+		lstPoligonos.forEach(plg=>{
+			arrESPs.forEach(lstESPs=>{
+				var iESP=lstESPs.findId(""+plg.INE);
+				var esp=lstESPs[iESP];
+				esp["poligonos"]=[];
+				esp.poligonos.push(plg);
+				if ((esp.actuante=="DGA")&&(esp.estado!=="Iniciativa Privada")){
+					console.log(esp.nombre+ "\t("+esp.Municipio+"/"+esp.Comarca+")"+ "\t - \t"+ esp.estado + "\t - \t" + esp.actuante +"\t ("+esp.portador+")" + "\t - \t" + plg.nombre + "\t - \t" + plg["PEBA 2019"]);
+				}
+			});
+		});
+	});
+	centros.forEach(lstCentros=>{
+		lstCentros.forEach(centro=>{
+			arrESPs.forEach(lstESPs=>{
+				var lstResult=lstESPs.filter(esp=>{
+					if (esp.complexId==centro.complexId){
+						debugger;
+						if (!isDef(esp["CentrosEducativos"])){
+							esp["CentrosEducativos"]=[];
+						}
+						esp.CentrosEducativos.push(centro);
+						return true;
+					}
+					return false;
+				});
+			});
+		});
+	});
+	/*
+				{archivo:"data/Cobertura-2018.xlsx",tipo:"cobertura"},
+				{archivo:"data/FactorSocial4G.xlsx",tipo:"fs4G"},
+				{archivo:"data/Poligonos2019.xlsx",tipo:"poligonos"},
+				{archivo:"data/SoloINE.xlsx",tipo:"ine"},
+				{archivo:"data/Internet en aragon.xlsx",tipo:"detalle"}
+*/
+}
+
 var datos={};
 var theTree="";
+
+
 var loadTree=function (objTree){
 	debugger;
 	theTree=objTree;
 	if (! isDef(objTree.loadedNodes)){
 		$("#loading").html("Visualizando Datos...");
+		consolidarESPs();
 		datos={};
 		objTree.loadedNodes=true;
 		objTree.datos=datos;
@@ -109,15 +262,22 @@ var loadTree=function (objTree){
 					DPH:{entidades:0, planificadas:0,habitantes:0, habPlanificadas:0},
 					DPZ:{entidades:0, planificadas:0,habitantes:0, habPlanificadas:0},
 					ACUMULADO:{entidades:0, planificadas:0, habitantes:0, habPlanificadas:0},
-					TOTAL:{entidades:0, habitantes:0}
+					TOTAL:{entidades:0, habitantes:0},
+					MOVIL4G:{
+						FS30:{actual:{entidades:0,habitantes:0},planificado:{entidades:0,habitantes:0}},
+						MAS95:{actual:{entidades:0,habitantes:0},planificado:{entidades:0,habitantes:0}},
+						MAS80:{actual:{entidades:0,habitantes:0},planificado:{entidades:0,habitantes:0}},
+						MAS50:{actual:{entidades:0,habitantes:0},planificado:{entidades:0,habitantes:0}},
+						MENOS50:{actual:{entidades:0,habitantes:0},planificado:{entidades:0,habitantes:0}}
+					}
 				}
 					
 		}
 		datos.estado=datos.createStats();
 		
-		arrESPs.forEach(oESP=>{
+		arrESPs[0].forEach(oESP=>{
 			debugger;
-			log(JSON.stringify(oESP,3));
+			//log(JSON.stringify(oESP,3));
 			var sProvincia=((oESP.Provincia==22)?"DPH":(oESP.Provincia==44)?"DPT":"DPZ");
 			var sProvinciaName=((oESP.Provincia==22)?"Provincia de Huesca":(oESP.Provincia==44)?"Provincia de Teruel":"Provincia de Zaragoza");
 			var provincia=datos.provincias[sProvincia];
@@ -215,7 +375,36 @@ var loadTree=function (objTree){
 						elemento.estado["ACUMULADO"].entidades++;
 						elemento.estado["ACUMULADO"].habitantes+=entidad.datos.Total;
 					}
-				}			
+				}
+				debugger;
+				var movil4G=entidad.datos["4G"]*100;
+				var fs4G=entidad.datos["FS4G"];
+				var bPlannedFS=false;
+				var sStadoCampo="";
+				if (isDef(fs4G)){
+					var fsEstado=fs4G.estado;
+					if (fsEstado=="Planificado"){
+						bPlannedFS=true;
+						elemento.estado.MOVIL4G["FS30"].planificado.entidades++;
+						elemento.estado.MOVIL4G["FS30"].planificado.habitantes+=entidad.datos.Total;
+					} else {
+						elemento.estado.MOVIL4G["FS30"].actual.entidades++;
+						elemento.estado.MOVIL4G["FS30"].actual.habitantes+=entidad.datos.Total;
+					}						
+				} else {
+//				if (bPlannedFS || (!isDef(fs4G))){
+					if (movil4G<=50){
+						sStadoCampo="MENOS50";
+					} else if (movil4G<=80){
+						sStadoCampo="MAS50";
+					} else if (movil4G<=95){
+						sStadoCampo="MAS80";
+					} else {
+						sStadoCampo="MAS95";
+					}
+					elemento.estado.MOVIL4G[sStadoCampo].actual.entidades++;
+					elemento.estado.MOVIL4G[sStadoCampo].actual.habitantes+=entidad.datos.Total;					
+				}
 			});
 		});
 		var arrDDPP=["DPH","DPT","DPZ"];
@@ -366,10 +555,11 @@ var loadTree=function (objTree){
 var onClick=function(oItem){
 	debugger;
 	var oElemData="";
-	if (!isDef(oItem.tipo)) {
+	if ((!isDef(oItem.tipo))||(oItem.tipo=="Comunidad Autónoma")) {
 		if ((oItem.idTree=="DGA")||(oItem.id=="DGA")){
 			oElemData=datos;
 			oElemData.tipo="Comunidad Autónoma";
+			oElemData.nombre="Aragón";
 		} else {
 			oElemData=datos.byIndex[oItem.id];
 		}
@@ -501,6 +691,108 @@ var onClick=function(oItem){
 		colors:rstColorsHABs,
 	});
 	
+	
+	
+	var dataDetalleESPs4G=[];
+	var dataDetalleHabs4G=[];
+	var arrColors4G=["#002200", "#004400","#006600","#008800","#440000","#880000"];
+	var rstColorsESPs4G=[];
+	var rstColorsHABs4G=[];
+	
+	// datos de 4G
+	var m4G=oElemData.estado.MOVIL4G;
+	var html4G="";
+	if (m4G.FS30.actual.entidades>0){
+		html4G+="\n<br>Cobertura >=30 Mbps:"+m4G.FS30.actual.entidades+ " ("+m4G.FS30.actual.habitantes+" habs)";
+		dataDetalleHabs4G.push({label:">=30Mbps: "+m4G.FS30.actual.habitantes,data:m4G.FS30.actual.habitantes});
+		rstColorsHABs4G.push("#002200");
+		dataDetalleESPs4G.push({label:">=30Mbps: "+m4G.FS30.actual.entidades,data:m4G.FS30.actual.entidades});
+		rstColorsESPs4G.push("#002200");
+	} 
+	if (m4G.FS30.planificado.entidades>0){
+		html4G+="\n<br>Cobertura >=30 Mbps (Planificado):"+m4G.FS30.planificado.entidades+ " ("+m4G.FS30.planificado.habitantes+" habs)";
+		dataDetalleHabs4G.push({label:">=30Mbps (Planificado): "+m4G.FS30.planificado.habitantes,data:m4G.FS30.planificado.habitantes});
+		rstColorsHABs4G.push("#004400");
+		dataDetalleESPs4G.push({label:">=30Mbps (Planificado): "+m4G.FS30.planificado.entidades,data:m4G.FS30.planificado.entidades});
+		rstColorsESPs4G.push("#004400");
+	} 
+	if (m4G.MAS95.actual.entidades>0){
+		html4G+="\n<br>Cobertura calidad >95%:"+m4G.MAS95.actual.entidades+ " ("+m4G.MAS95.actual.habitantes+" habs)";
+		dataDetalleHabs4G.push({label:">95%: "+m4G.MAS95.actual.habitantes,data:m4G.MAS95.actual.habitantes});
+		rstColorsHABs4G.push("#006600");
+		dataDetalleESPs4G.push({label:">95%: "+m4G.MAS95.actual.entidades,data:m4G.MAS95.actual.entidades});
+		rstColorsESPs4G.push("#006600");
+	}
+	if (m4G.MAS80.actual.entidades>0){
+		html4G+="\n<br>Cobertura calidad >80%:"+m4G.MAS80.actual.entidades+ " ("+m4G.MAS80.actual.habitantes+" habs)";
+		dataDetalleHabs4G.push({label:">80%: "+m4G.MAS80.actual.habitantes,data:m4G.MAS80.actual.habitantes});
+		rstColorsHABs4G.push("#008800");
+		dataDetalleESPs4G.push({label:">80%: "+m4G.MAS80.actual.entidades,data:m4G.MAS80.actual.entidades});
+		rstColorsESPs4G.push("#008800");
+	}
+	if (m4G.MAS50.actual.entidades>0){
+		html4G+="\n<br>Cobertura calidad >50%:"+m4G.MAS50.actual.entidades+ " ("+m4G.MAS50.actual.habitantes+" habs)";
+		dataDetalleHabs4G.push({label:">50%: "+m4G.MAS50.actual.habitantes,data:m4G.MAS50.actual.habitantes});
+		rstColorsHABs4G.push("#660000");
+		dataDetalleESPs4G.push({label:">50%: "+m4G.MAS50.actual.entidades,data:m4G.MAS50.actual.entidades});
+		rstColorsESPs4G.push("#660000");
+	}
+	if (m4G.MENOS50.actual.entidades>0){
+		html4G+="\n<br>Cobertura calidad <=50%:"+m4G.MENOS50.actual.entidades+ " ("+m4G.MENOS50.actual.habitantes+" habs)";
+		dataDetalleHabs4G.push({label:"<=50%: "+m4G.MENOS50.actual.habitantes,data:m4G.MENOS50.actual.habitantes});
+		rstColorsHABs4G.push("#AA0000");
+		dataDetalleESPs4G.push({label:"<=50%: "+m4G.MENOS50.actual.entidades,data:m4G.MENOS50.actual.entidades});
+		rstColorsESPs4G.push("#AA0000");
+	}
+
+	$("#info4G").html(html4G);
+	
+	
+	
+	if (dataDetalleESPs4G.length==0) dataDetalleESPs4G.push({label:"SIN ENTIDADES",data:0});
+	if (dataDetalleHabs4G.length==0) dataDetalleHabs4G.push({label:"SIN HABITANTES",data:0});
+	$.plot('#tartaDetalleESPs4G', dataDetalleESPs4G, {
+		series: {
+			pie: {
+				show: true
+			}
+		},
+		colors:rstColorsESPs4G,
+	});
+	$.plot('#tartaDetalleHabs4G', dataDetalleHabs4G, {
+		series: {
+			pie: {
+				show: true
+			}
+		},
+		colors:rstColorsHABs4G,
+	});
+	
+
+	if ((oItem.tipo=="Municipio")||(oItem.tipo=="Entidad Singular de Población")){
+		var detalle;
+		var municipio="";
+		if (oItem.tipo=="Entidad Singular de Población") {
+			detalle=oItem.datos;
+			municipio=oItem.oParent.nombre;
+		} else {
+			detalle=oItem.arrEntidades[0].datos;
+			municipio=oItem.nombre;
+		}
+		if (detalle.CentrosEducativos.length>0) {
+			$("#infoCentrosEducativos").show();
+			var lstCentrosInfo='';
+			detalle.CentrosEducativos.forEach(centro=>{
+					lstCentrosInfo+="\n<br>&nbsp;&nbsp;&nbsp;&nbsp;"+centro["ACRÓNIMO"]+" "+centro["NOMBRE CENTRO"]+ " ("+centro["SOLUCION DEFINITIVA (DIBA/FTTH)"]+")";
+			});
+			$("#lstCentros").html(lstCentrosInfo);
+			$("#nombreMunicipio").html(municipio);
+		} else {
+			$("#infoCentrosEducativos").hide();
+		}
+	} else {
+		$("#infoCentrosEducativos").hide();
+	}
 //	log(oItem);
 //	log(datos);
 }
@@ -561,38 +853,58 @@ window.onload = function() {
 			<div id="infoSeleccionado">Seleccionado: <span id="selectedName"></span> </div>
 			<div id="infoPath">Detalle: <span id="selectedPath"></span> </div>
 			<div id="infoSeleccionadoTipo">Tipo: <span id="selectedType"></span> </div>
+			<div id="infoCentrosEducativos">
+				<hr>
+				<b>Centros Educativos conectados con ConectAragón
+				<br>&nbsp;&nbsp;&nbsp;municipio de <span id="nombreMunicipio"></span>:
+				</b>
+				<span id="lstCentros"></span>
+			</div>
 			<hr>
-			<div id="infoESPsTotal">Total Entidades: <span id="espsTotalVal"> 0 </span> </div>
+			<div id="infoESPsTotal"><b>Total Entidades (Fijo):</b> <span id="espsTotalVal"> 0 </span> </div>
 			<div id="infoESPs">&nbsp;&nbsp;&nbsp;Entidades con Banda Ancha: <span id="espsVal"> 0 </span> </div>
 			<div id="infoESPsPlanificadas">&nbsp;&nbsp;&nbsp;Entidades con Banda Ancha Planificada: <span id="espsPrevistasVal"> 0 </span> </div>
 				<div id="infoDetallePlanificacion"></div>
 			<div id="infoESPsPendientes">&nbsp;&nbsp;&nbsp;Entidades pendientes: <span id="espsPendientesVal"> 0 </span> </div>
 
-			<div id="infoHabitantesTotal">Total Habitantes: <span id="habsTotalVal"> 0 </span> </div>
+			<div id="infoHabitantesTotal"><b>Total Habitantes (Fijo):</b> <span id="habsTotalVal"> 0 </span> </div>
 			<div id="infoHabitantes">&nbsp;&nbsp;&nbsp;Habitantes con acceso a Banda Ancha: <span id="habsVal"> 0 </span> </div>
 			<div id="infoHabitantesPlanificadas">&nbsp;&nbsp;&nbsp;Habitantes con acceso a Banda Ancha Planificada: <span id="habsPrevistasVal"> 0 </span> </div>
 			<div id="infoHabitantesPendientes">&nbsp;&nbsp;&nbsp;Habitantes pendientes: <span id="habsPendientesVal"> 0 </span> </div>
+			<hr>
+			<b>Internet Móvil 4G LTE</b>
+			<div id="info4G"> 
+			</div>
+			
 		</div>
 	</div>
 	<div id="tartas" class="FloatLeft">
 		<div style="display:inline-block;padding-right: 30px;width:300px">
-			Entidades Singulares de Población 
+			Entidades Singulares de Población (Fijo)
 			<div>
 				<div id="tartaESPs" class="demo-placeholder"></div>
 			</div>
-			Detalle entidades
+			Detalle entidades (Fijo)
 			<div>
 				<div id="tartaDetalleESPs" class="demo-placeholder"></div>
 			</div>
+			Detalle entidades (Móvil 4G)
+			<div>
+				<div id="tartaDetalleESPs4G" class="demo-placeholder"></div>
+			</div>
 		</div>
 		<div style="display:inline-block;padding-right: 30px;width:300px">
-			Habitantes censados
+			Habitantes censados (Fijo)
 			<div>
 				<div id="tartaHabs" class="demo-placeholder"></div>
 			</div>
-			Detalle habitantes
+			Detalle habitantes (Fijo)
 			<div>
 				<div id="tartaDetalleHabs" class="demo-placeholder"></div>
+			</div>
+			Detalle habitantes (Móvil 4G)
+			<div>
+				<div id="tartaDetalleHabs4G" class="demo-placeholder"></div>
 			</div>
 		</div>
 	</div>
