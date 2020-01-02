@@ -34,10 +34,16 @@ var fncCentroComplexId=function(centro){
 	}
 	return centroMunicipio+"/"+centroProvincia;
 }
+var fncPoligonoComplexId=function(poligono){
+	var srcMunicipio=poligono.nombremunicipio.trim().toUpperCase();
+	var srcProvincia=poligono.nombreprovincia.trim().toUpperCase();
+	return srcMunicipio+"/"+srcProvincia;
+}
 var arrExcels=[ 
 				{archivo:"data/Cobertura-2018.xlsx",tipo:"cobertura",elemId:"Código ESP"},
 				{archivo:"data/FactorSocial4G.xlsx",tipo:"fs4G", elemId:"Cod INE Entidad Singular"},
-				{archivo:"data/Poligonos2019.xlsx",tipo:"poligonos",elemId:"INE"},
+				{archivo:"data/Poligonos2019.xlsx",tipo:"poligonos",elemId:"INE",complexId:fncPoligonoComplexId},
+				{archivo:"data/TodosPoligonos.xlsx",tipo:"allPoligonos",elemId:"id",complexId:fncPoligonoComplexId},
 				{archivo:"data/ConectAragon-CentrosEducativos2019.xlsx",tipo:"centros",elemId:"NUM ADMINISTRATIVO",complexId:fncCentroComplexId},
 				{archivo:"data/Internet en aragon.xlsx",tipo:"detalle",elemId:"codINE", complexId:fncEspComplexId}
 				
@@ -163,6 +169,7 @@ var consolidarESPs=function(){
 	var fs4Gs=arrShtData.fs4G;
 	var poligonos=arrShtData.poligonos;
 	var centros=arrShtData.centros;
+	var allPoligonos=arrShtData.allPoligonos;
 	arrESPs.forEach(lstESPs=>{
 		lstESPs.forEach(esp=>{
 			coberturas.forEach(cobertura=>{
@@ -186,16 +193,72 @@ var consolidarESPs=function(){
 		});
 	});
 	debugger;
-	poligonos.forEach(lstPoligonos=>{
-		lstPoligonos.forEach(plg=>{
+	allPoligonos.forEach(lstAllPoligonos=>{
+		lstAllPoligonos.forEach(poligono=>{
+			if (!isDef(poligono["enLugares"])){
+				poligono["enLugares"]=[];
+			}
 			arrESPs.forEach(lstESPs=>{
-				var iESP=lstESPs.findId(""+plg.INE);
-				var esp=lstESPs[iESP];
-				esp["poligonos"]=[];
-				esp.poligonos.push(plg);
-				if ((esp.actuante=="DGA")&&(esp.estado!=="Iniciativa Privada")){
-					console.log(esp.nombre+ "\t("+esp.Municipio+"/"+esp.Comarca+")"+ "\t - \t"+ esp.estado + "\t - \t" + esp.actuante +"\t ("+esp.portador+")" + "\t - \t" + plg.nombre + "\t - \t" + plg["PEBA 2019"]);
-				}
+				var srcESPs=lstESPs.filter(esp=>{
+					if (esp.complexId==poligono.complexId) {
+						debugger;
+						if (!isDef(esp["poligonos"])){
+							esp["poligonos"]=[];
+						}
+						esp.poligonos.push(poligono);
+						if (!isDef(poligono["subvencionInternet"])){
+							poligono["subvencionInternet"]=false;
+						}
+						poligono.enLugares.push(esp);
+						return true;
+					}
+					return false;
+				});
+			});
+			poligonos.forEach(lstPoligonos=>{
+				lstPoligonos.forEach(dgaPoligono=>{
+					debugger;
+					if (!isDef(dgaPoligono.enLugares)){
+						dgaPoligono["enLugares"]=[];
+					}
+					if (dgaPoligono.complexId==poligono.complexId){
+						var dgaAdvIndex=dgaPoligono.complexId+"/"+dgaPoligono.nombre.trim().toUpperCase();
+						var fullAdvIndex=poligono.complexId+"/"+poligono.nombre.trim().toUpperCase();
+						if (dgaAdvIndex==fullAdvIndex){
+							poligono.subvencionInternet=dgaPoligono;
+							dgaPoligono.enLugares=poligono.enLugares;
+						}
+					}
+				});
+			});
+			
+		});
+	});
+	poligonos.forEach(lstPoligonos=>{
+		var srcPoligonos=lstPoligonos.filter(dgaPoligono=>{
+			if (dgaPoligono.enLugares.length<=0){
+				return true;
+			}
+			return false;
+		});
+		srcPoligonos.forEach(poligono=>{
+			arrESPs.forEach(lstESPs=>{
+				lstESPs.forEach(esp=>{
+					if (esp.complexId==poligono.complexId) {
+						debugger;
+						if (!isDef(esp["poligonos"])){
+							esp["poligonos"]=[];
+						}
+						esp.poligonos.push(poligono);
+						if (!isDef(poligono["subvencionInternet"])){
+							poligono["subvencionInternet"]=false;
+						}
+						poligono["subvencionInternet"]=poligono;
+						poligono.enLugares.push(esp);
+						return true;
+					}
+					return false;
+				});
 			});
 		});
 	});
@@ -779,7 +842,7 @@ var onClick=function(oItem){
 			detalle=oItem.arrEntidades[0].datos;
 			municipio=oItem.nombre;
 		}
-		if (detalle.CentrosEducativos.length>0) {
+		if (isDef(detalle.CentrosEducativos) && (detalle.CentrosEducativos.length>0)) {
 			$("#infoCentrosEducativos").show();
 			var lstCentrosInfo='';
 			detalle.CentrosEducativos.forEach(centro=>{
@@ -790,8 +853,32 @@ var onClick=function(oItem){
 		} else {
 			$("#infoCentrosEducativos").hide();
 		}
+		if (isDef(detalle.poligonos) && (detalle.poligonos.length>0)){
+			$("#infoPoligonos").show();
+			var lstPoligonosInfo='';
+			detalle.poligonos.forEach(poligono=>{
+				lstPoligonosInfo+="\n<br>&nbsp;&nbsp;&nbsp;&nbsp;"+
+										poligono["nombre"];
+				var subvencionInfo="";
+				if (isDef(poligono.subvencionInternet) && (poligono.subvencionInternet!==false)){
+					if (poligono.subvencionInternet["PEBA 2019"].trim()!==""){
+						subvencionInfo= " - Planificado Ministerio Economía y Empresa";
+					} else {
+						subvencionInfo= " - Identificado Subvención DGA";
+					}
+				} else {
+					subvencionInfo= " - Disponible (Inversión Privada)"
+				}
+				lstPoligonosInfo+=subvencionInfo;
+			});
+			$("#lstPoligonos").html(lstPoligonosInfo);
+			$("#nombreMunicipioPoligonos").html(municipio);
+		} else {
+			$("#infoPoligonos").hide();
+		}
 	} else {
 		$("#infoCentrosEducativos").hide();
+		$("#infoPoligonos").hide();
 	}
 //	log(oItem);
 //	log(datos);
@@ -853,13 +940,6 @@ window.onload = function() {
 			<div id="infoSeleccionado">Seleccionado: <span id="selectedName"></span> </div>
 			<div id="infoPath">Detalle: <span id="selectedPath"></span> </div>
 			<div id="infoSeleccionadoTipo">Tipo: <span id="selectedType"></span> </div>
-			<div id="infoCentrosEducativos">
-				<hr>
-				<b>Centros Educativos conectados con ConectAragón
-				<br>&nbsp;&nbsp;&nbsp;municipio de <span id="nombreMunicipio"></span>:
-				</b>
-				<span id="lstCentros"></span>
-			</div>
 			<hr>
 			<div id="infoESPsTotal"><b>Total Entidades (Fijo):</b> <span id="espsTotalVal"> 0 </span> </div>
 			<div id="infoESPs">&nbsp;&nbsp;&nbsp;Entidades con Banda Ancha: <span id="espsVal"> 0 </span> </div>
@@ -874,6 +954,20 @@ window.onload = function() {
 			<hr>
 			<b>Internet Móvil 4G LTE</b>
 			<div id="info4G"> 
+			</div>
+			<div id="infoCentrosEducativos">
+				<hr>
+				<b>Centros Educativos conectados con ConectAragón
+				<br>&nbsp;&nbsp;&nbsp;municipio de <span id="nombreMunicipio"></span>:
+				</b>
+				<span id="lstCentros"></span>
+			</div>
+			<div id="infoPoligonos">
+				<hr>
+				<b>Información sobre Polígonos
+				<br>&nbsp;&nbsp;&nbsp;municipio de <span id="nombreMunicipioPoligonos"></span>:
+				</b>
+				<span id="lstPoligonos"></span>
 			</div>
 			
 		</div>
